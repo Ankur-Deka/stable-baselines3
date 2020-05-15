@@ -1,4 +1,4 @@
-import time
+import time, sys
 from typing import List, Tuple, Type, Union, Callable, Optional, Dict, Any
 
 import gym
@@ -14,7 +14,6 @@ import torch.nn.functional as F
 #     SummaryWriter = None
 import numpy as np
 
-from stable_baselines3.common import logger
 from stable_baselines3.common.base_class import BaseRLModel
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.buffers import RolloutBuffer
@@ -100,8 +99,7 @@ class PPO(BaseRLModel):
 
         super(PPO, self).__init__(policy, env, PPOPolicy, learning_rate, policy_kwargs=policy_kwargs,
                                   verbose=verbose, device=device, use_sde=use_sde, sde_sample_freq=sde_sample_freq,
-                                  create_eval_env=create_eval_env, support_multi_env=True, seed=seed)
-
+                                  create_eval_env=create_eval_env, support_multi_env=True, seed=seed, tensorboard_log=tensorboard_log)
         self.batch_size = batch_size
         self.n_epochs = n_epochs
         self.n_steps = n_steps
@@ -114,8 +112,8 @@ class PPO(BaseRLModel):
         self.max_grad_norm = max_grad_norm
         self.rollout_buffer = None
         self.target_kl = target_kl
-        self.tensorboard_log = tensorboard_log
-        self.tb_writer = None
+        # self.tensorboard_log = tensorboard_log
+        # self.tb_writer = None
 
         if _init_setup_model:
             self._setup_model()
@@ -284,19 +282,19 @@ class PPO(BaseRLModel):
         explained_var = explained_variance(self.rollout_buffer.returns.flatten(),
                                            self.rollout_buffer.values.flatten())
 
-        logger.logkv("n_updates", self._n_updates)
-        logger.logkv("clip_fraction", np.mean(clip_fraction))
-        logger.logkv("clip_range", clip_range)
+        self.logger.logkv("n_updates", self._n_updates)
+        self.logger.logkv("clip_fraction", np.mean(clip_fraction))
+        self.logger.logkv("clip_range", clip_range)
         if self.clip_range_vf is not None:
-            logger.logkv("clip_range_vf", clip_range_vf)
+            self.logger.logkv("clip_range_vf", clip_range_vf)
 
-        logger.logkv("approx_kl", np.mean(approx_kl_divs))
-        logger.logkv("explained_variance", explained_var)
-        logger.logkv("entropy_loss", np.mean(entropy_losses))
-        logger.logkv("policy_gradient_loss", np.mean(pg_losses))
-        logger.logkv("value_loss", np.mean(value_losses))
+        self.logger.logkv("approx_kl", np.mean(approx_kl_divs))
+        self.logger.logkv("explained_variance", explained_var)
+        self.logger.logkv("entropy_loss", np.mean(entropy_losses))
+        self.logger.logkv("policy_gradient_loss", np.mean(pg_losses))
+        self.logger.logkv("value_loss", np.mean(value_losses))
         if hasattr(self.policy, 'log_std'):
-            logger.logkv("std", th.exp(self.policy.log_std).mean().item())
+            self.logger.logkv("std", th.exp(self.policy.log_std).mean().item())
 
     def learn(self,
               total_timesteps: int,
@@ -333,14 +331,14 @@ class PPO(BaseRLModel):
             # Display training infos
             if self.verbose >= 1 and log_interval is not None and iteration % log_interval == 0:
                 fps = int(self.num_timesteps / (time.time() - self.start_time))
-                logger.logkv("iterations", iteration)
+                self.logger.logkv("iterations", iteration)
                 if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
-                    logger.logkv('ep_rew_mean', self.safe_mean([ep_info['r'] for ep_info in self.ep_info_buffer]))
-                    logger.logkv('ep_len_mean', self.safe_mean([ep_info['l'] for ep_info in self.ep_info_buffer]))
-                logger.logkv("fps", fps)
-                logger.logkv('time_elapsed', int(time.time() - self.start_time))
-                logger.logkv("total timesteps", self.num_timesteps)
-                logger.dumpkvs()
+                    self.logger.logkv('ep_rew_mean', self.safe_mean([ep_info['r'] for ep_info in self.ep_info_buffer]))
+                    self.logger.logkv('ep_len_mean', self.safe_mean([ep_info['l'] for ep_info in self.ep_info_buffer]))
+                self.logger.logkv("fps", fps)
+                self.logger.logkv('time_elapsed', int(time.time() - self.start_time))
+                self.logger.logkv("total timesteps", self.num_timesteps)
+                self.logger.dumpkvs()
 
             self.train(self.n_epochs, batch_size=self.batch_size)
 

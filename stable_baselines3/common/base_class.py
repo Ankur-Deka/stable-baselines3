@@ -1,5 +1,6 @@
 import time
 import os
+import sys
 import io
 import zipfile
 import pickle
@@ -11,7 +12,7 @@ import gym
 import torch as th
 import numpy as np
 
-from stable_baselines3.common import logger
+from stable_baselines3.common.logger import Logger, HumanOutputFormat, TensorBoardOutputFormat
 from stable_baselines3.common.policies import BasePolicy, get_policy_from_name
 from stable_baselines3.common.utils import set_random_seed, get_schedule_fn, update_learning_rate, get_device
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, unwrap_vec_normalize, VecNormalize, VecTransposeImage
@@ -65,7 +66,8 @@ class BaseRLModel(ABC):
                  monitor_wrapper: bool = True,
                  seed: Optional[int] = None,
                  use_sde: bool = False,
-                 sde_sample_freq: int = -1):
+                 sde_sample_freq: int = -1,
+                 tensorboard_log = None):
 
         if isinstance(policy, str) and policy_base is not None:
             self.policy_class = get_policy_from_name(policy_base, policy)
@@ -107,7 +109,7 @@ class BaseRLModel(ABC):
         self.ep_success_buffer = None  # type: Optional[deque]
         # For logging
         self._n_updates = 0  # type: int
-
+        self.tensorboard_log = tensorboard_log
         # Create and wrap the env if needed
         if env is not None:
             if isinstance(env, str):
@@ -134,6 +136,12 @@ class BaseRLModel(ABC):
             if not support_multi_env and self.n_envs > 1:
                 raise ValueError("Error: the model does not support multiple envs requires a single vectorized"
                                  " environment.")
+
+        # -------------------- logging/tensorboard -------------------- #
+        output_formats = [HumanOutputFormat(sys.stdout)]
+        if not self.tensorboard_log is None:
+            output_formats.append(TensorBoardOutputFormat(self.tensorboard_log))
+        self.logger = Logger(folder=None, output_formats=output_formats)
 
     def _wrap_env(self, env: GymEnv) -> VecEnv:
         if not isinstance(env, VecEnv):
@@ -191,7 +199,7 @@ class BaseRLModel(ABC):
             An optimizer or a list of optimizers.
         """
         # Log the current learning rate
-        logger.logkv("learning_rate", self.lr_schedule(self._current_progress))
+        self.logger.logkv("learning_rate", self.lr_schedule(self._current_progress))
 
         if not isinstance(optimizers, list):
             optimizers = [optimizers]
@@ -706,12 +714,14 @@ class OffPolicyRLModel(BaseRLModel):
                  use_sde: bool = False,
                  sde_sample_freq: int = -1,
                  use_sde_at_warmup: bool = False,
-                 sde_support: bool = True):
+                 sde_support: bool = True,
+                 tensorboard_log = None):
 
         super(OffPolicyRLModel, self).__init__(policy, env, policy_base, learning_rate,
                                                policy_kwargs, verbose,
                                                device, support_multi_env, create_eval_env, monitor_wrapper,
-                                               seed, use_sde, sde_sample_freq)
+                                               seed, use_sde, sde_sample_freq,
+                                               tensorboard_log=tensorboard_log)
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.learning_starts = learning_starts
@@ -876,19 +886,19 @@ class OffPolicyRLModel(BaseRLModel):
                 # Display training infos
                 if self.verbose >= 1 and log_interval is not None and self._episode_num % log_interval == 0:
                     fps = int(self.num_timesteps / (time.time() - self.start_time))
-                    logger.logkv("episodes", self._episode_num)
+                    self.logger.logkv("episodes", self._episode_num)
                     if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
-                        logger.logkv('ep_rew_mean', self.safe_mean([ep_info['r'] for ep_info in self.ep_info_buffer]))
-                        logger.logkv('ep_len_mean', self.safe_mean([ep_info['l'] for ep_info in self.ep_info_buffer]))
-                    logger.logkv("fps", fps)
-                    logger.logkv('time_elapsed', int(time.time() - self.start_time))
-                    logger.logkv("total timesteps", self.num_timesteps)
+                        self.logger.logkv('ep_rew_mean', self.safe_mean([ep_info['r'] for ep_info in self.ep_info_buffer]))
+                        self.logger.logkv('ep_len_mean', self.safe_mean([ep_info['l'] for ep_info in self.ep_info_buffer]))
+                    self.logger.logkv("fps", fps)
+                    self.logger.logkv('time_elapsed', int(time.time() - self.start_time))
+                    self.logger.logkv("total timesteps", self.num_timesteps)
                     if self.use_sde:
-                        logger.logkv("std", (self.actor.get_std()).mean().item())
+                        self.logger.logkv("std", (self.actor.get_std()).mean().item())
 
                     if len(self.ep_success_buffer) > 0:
-                        logger.logkv('success rate', self.safe_mean(self.ep_success_buffer))
-                    logger.dumpkvs()
+                        self.logger.logkv('success rate', self.safe_mean(self.ep_success_buffer))
+                    self.logger.dumpkvs()
 
         mean_reward = np.mean(episode_rewards) if total_episodes > 0 else 0.0
 

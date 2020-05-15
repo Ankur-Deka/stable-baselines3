@@ -6,6 +6,7 @@ import tempfile
 import warnings
 from collections import defaultdict
 from typing import Dict, List, TextIO, Union, Any, Optional
+from torch.utils.tensorboard import SummaryWriter
 
 import pandas
 
@@ -190,6 +191,9 @@ class CSVOutputFormat(KVWriter):
         self.file.close()
 
 
+
+
+
 def valid_float_value(value: Any) -> bool:
     """
     Returns True if the value can be successfully cast into a float
@@ -204,26 +208,84 @@ def valid_float_value(value: Any) -> bool:
         return False
 
 
-def make_output_format(_format: str, log_dir: str, log_suffix: str = '') -> KVWriter:
+# def make_output_format(_format: str, log_dir: str, log_suffix: str = '') -> KVWriter:
+#     """
+#     return a logger for the requested format
+
+#     :param _format: (str) the requested format to log to ('stdout', 'log', 'json' or 'csv')
+#     :param log_dir: (str) the logging directory
+#     :param log_suffix: (str) the suffix for the log file
+#     :return: (KVWriter) the logger
+#     """
+#     os.makedirs(log_dir, exist_ok=True)
+#     if _format == 'stdout':
+#         return HumanOutputFormat(sys.stdout)
+#     elif _format == 'log':
+#         return HumanOutputFormat(os.path.join(log_dir, f'log{log_suffix}.txt'))
+#     elif _format == 'json':
+#         return JSONOutputFormat(os.path.join(log_dir, f'progress{log_suffix}.json'))
+#     elif _format == 'csv':
+#         return CSVOutputFormat(os.path.join(log_dir, f'progress{log_suffix}.csv'))
+#     else:
+#         raise ValueError(f'Unknown format specified: {_format}')
+
+# Tensorboard Code taken from https://github.com/hill-a/stable-baselines/blob/master/stable_baselines/logger.py
+class TensorBoardOutputFormat(KVWriter):
+    def __init__(self, folder):
+        """
+        Dumps key/value pairs into TensorBoard's numeric format.
+        :param folder: (str) the folder to write the log to
+        """
+        os.makedirs(folder, exist_ok=True)
+        self.dir = folder
+        self.step = 1
+        # self.writer = pywrap_tensorflow.EventsWriter(compat.as_bytes(path))  # type: pywrap_tensorflow.EventsWriter
+        self.writer = SummaryWriter(folder)
+
+    def writekvs(self, kvs):
+        for k,v in kvs.items():
+            self.writer.add_scalar(k, v, self.step)
+
+        # summary = tf.Summary(value=[summary_val(k, v) for k, v in kvs.items() if valid_float_value(v)])
+        # event = event_pb2.Event(wall_time=time.time(), summary=summary)
+        # event.step = self.step  # is there any reason why you'd want to specify the step?
+        # if self.writer is None:
+        #     raise ValueError("Attempt to write after close().")
+        # self.writer.WriteEvent(event)
+        # self.writer.Flush()
+        self.step += 1
+
+    # def close(self):
+    #     """
+    #     closes the file
+    #     """
+    #     if self.writer:
+    #         self.writer.Close()
+    #         self.writer = None
+
+
+def make_output_format(_format, ev_dir, log_suffix=''):
     """
     return a logger for the requested format
-
-    :param _format: (str) the requested format to log to ('stdout', 'log', 'json' or 'csv')
-    :param log_dir: (str) the logging directory
+    :param _format: (str) the requested format to log to ('stdout', 'log', 'json', 'csv' or 'tensorboard')
+    :param ev_dir: (str) the logging directory
     :param log_suffix: (str) the suffix for the log file
-    :return: (KVWriter) the logger
+    :return: (KVWrite) the logger
     """
-    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(ev_dir, exist_ok=True)
     if _format == 'stdout':
         return HumanOutputFormat(sys.stdout)
     elif _format == 'log':
-        return HumanOutputFormat(os.path.join(log_dir, f'log{log_suffix}.txt'))
+        return HumanOutputFormat(os.path.join(ev_dir, 'log%s.txt' % log_suffix))
     elif _format == 'json':
-        return JSONOutputFormat(os.path.join(log_dir, f'progress{log_suffix}.json'))
+        return JSONOutputFormat(os.path.join(ev_dir, 'progress%s.json' % log_suffix))
     elif _format == 'csv':
-        return CSVOutputFormat(os.path.join(log_dir, f'progress{log_suffix}.csv'))
+        return CSVOutputFormat(os.path.join(ev_dir, 'progress%s.csv' % log_suffix))
+    elif _format == 'tensorboard':
+        return TensorBoardOutputFormat(os.path.join(ev_dir, 'tb%s' % log_suffix))
     else:
-        raise ValueError(f'Unknown format specified: {_format}')
+        raise ValueError('Unknown format specified: %s' % (_format,))
+
 
 
 # ================================================================
@@ -483,7 +545,7 @@ class Logger(object):
 
 
 # Initialize logger
-Logger.DEFAULT = Logger.CURRENT = Logger(folder=None, output_formats=[HumanOutputFormat(sys.stdout)])
+# Logger.DEFAULT = Logger.CURRENT = Logger(folder=None, output_formats=[HumanOutputFormat(sys.stdout), TensorBoardOutputFormat('log_test_ppo')])
 
 
 def configure(folder: Optional[str] = None, format_strs: Optional[List[str]] = None) -> None:

@@ -2,7 +2,6 @@ import torch as th
 import torch.nn.functional as F
 from typing import List, Tuple, Type, Union, Callable, Optional, Dict, Any
 
-from stable_baselines3.common import logger
 from stable_baselines3.common.base_class import OffPolicyRLModel
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
@@ -76,7 +75,8 @@ class TD3(OffPolicyRLModel):
                                   buffer_size, learning_starts, batch_size,
                                   policy_kwargs, verbose, device,
                                   create_eval_env=create_eval_env, seed=seed,
-                                  sde_support=False)
+                                  sde_support=False,
+                                  tensorboard_log=tensorboard_log)
 
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
@@ -152,7 +152,7 @@ class TD3(OffPolicyRLModel):
                     target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
         self._n_updates += gradient_steps
-        logger.logkv("n_updates", self._n_updates)
+        self.logger.logkv("n_updates", self._n_updates)
 
     def learn(self,
               total_timesteps: int,

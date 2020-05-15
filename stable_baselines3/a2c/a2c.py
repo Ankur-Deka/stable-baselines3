@@ -3,7 +3,6 @@ import torch.nn.functional as F
 from gym import spaces
 from typing import Type, Union, Callable, Optional, Dict, Any
 
-from stable_baselines3.common import logger
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.utils import explained_variance
 from stable_baselines3.ppo.policies import PPOPolicy
@@ -141,13 +140,13 @@ class A2C(PPO):
                                            self.rollout_buffer.values.flatten())
 
         self._n_updates += 1
-        logger.logkv("n_updates", self._n_updates)
-        logger.logkv("explained_variance", explained_var)
-        logger.logkv("entropy_loss", entropy_loss.item())
-        logger.logkv("policy_loss", policy_loss.item())
-        logger.logkv("value_loss", value_loss.item())
+        self.logger.logkv("n_updates", self._n_updates)
+        self.logger.logkv("explained_variance", explained_var)
+        self.logger.logkv("entropy_loss", entropy_loss.item())
+        self.logger.logkv("policy_loss", policy_loss.item())
+        self.logger.logkv("value_loss", value_loss.item())
         if hasattr(self.policy, 'log_std'):
-            logger.logkv("std", th.exp(self.policy.log_std).mean().item())
+            self.logger.logkv("std", th.exp(self.policy.log_std).mean().item())
 
     def learn(self,
               total_timesteps: int,

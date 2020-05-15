@@ -4,7 +4,6 @@ import torch as th
 import torch.nn.functional as F
 import numpy as np
 
-from stable_baselines3.common import logger
 from stable_baselines3.common.base_class import OffPolicyRLModel
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback
 from stable_baselines3.common.noise import ActionNoise
@@ -93,7 +92,8 @@ class SAC(OffPolicyRLModel):
                                   policy_kwargs, verbose, device,
                                   create_eval_env=create_eval_env, seed=seed,
                                   use_sde=use_sde, sde_sample_freq=sde_sample_freq,
-                                  use_sde_at_warmup=use_sde_at_warmup)
+                                  use_sde_at_warmup=use_sde_at_warmup,
+                                  tensorboard_log=tensorboard_log)
 
         self.target_entropy = target_entropy
         self.log_ent_coef = None  # type: Optional[th.Tensor]
@@ -237,12 +237,12 @@ class SAC(OffPolicyRLModel):
 
         self._n_updates += gradient_steps
 
-        logger.logkv("n_updates", self._n_updates)
-        logger.logkv("ent_coef", np.mean(ent_coefs))
-        logger.logkv("actor_loss", np.mean(actor_losses))
-        logger.logkv("critic_loss", np.mean(critic_losses))
+        self.logger.logkv("n_updates", self._n_updates)
+        self.logger.logkv("ent_coef", np.mean(ent_coefs))
+        self.logger.logkv("actor_loss", np.mean(actor_losses))
+        self.logger.logkv("critic_loss", np.mean(critic_losses))
         if len(ent_coef_losses) > 0:
-            logger.logkv("ent_coef_loss", np.mean(ent_coef_losses))
+            self.logger.logkv("ent_coef_loss", np.mean(ent_coef_losses))
 
     def learn(self,
               total_timesteps: int,
